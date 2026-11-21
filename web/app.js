@@ -26,6 +26,7 @@ const copyButton = byId("copy");
 const clearButton = byId("clear");
 const notice = byId("notice");
 const maxInputBytes = 4096;
+const pythonLoadTimeout = 20000;
 const canUseLiveInput = window.crossOriginIsolated && typeof SharedArrayBuffer === "function";
 const encoder = new TextEncoder();
 const themeButtons = document.querySelectorAll("[data-theme-choice]");
@@ -34,6 +35,8 @@ const runTooltip = mac ? "Run code (⌘ + Enter)" : "Run code (Ctrl + Enter)";
 runButton.title = runTooltip;
 
 let activeRun = null;
+let preparedPython = null;
+let preferredRuntime = "site";
 let currentLine = -1;
 let leaveEditor = false;
 let noticeTimeout;
@@ -401,7 +404,8 @@ liveStdin.addEventListener("keydown", (event) => {
 function finishRun(run, event) {
   if (activeRun !== run) return;
   window.clearTimeout(run.timeout);
-  run.worker?.terminate();
+  if (run.worker) run.worker.terminate();
+  else discardPreparedPython();
   activeRun = null;
   hideInput();
   selectConsoleTab(outputTab);
@@ -470,14 +474,86 @@ function handleRunEvent(run, event) {
       break;
     case "done":
       finishRun(run, event);
-      break;
-    case "unavailable":
-      finishRun(run, { error: "Python could not load. Connect to the internet for the first run, then try again." });
+      preparePython();
       break;
   }
 }
 
-async function runCode() {
+function discardPreparedPython() {
+  if (!preparedPython) return;
+  window.clearTimeout(preparedPython.timeout);
+  preparedPython.worker?.terminate();
+  preparedPython = null;
+}
+
+async function preparePython() {
+  if (preparedPython) return;
+  const preparation = { worker: null, ready: false };
+  preparedPython = preparation;
+  // Give the service worker a chance to cache the runtime on a first visit.
+  await offlineCacheReady;
+  if (preparedPython === preparation) loadPython(preparation, preferredRuntime, true);
+}
+
+function loadPython(preparation, runtime, canRetry) {
+  let worker = null;
+  function failed() {
+    if (preparedPython !== preparation || preparation.worker !== worker) return;
+    window.clearTimeout(preparation.timeout);
+    worker?.terminate();
+    preparation.worker = null;
+    preparation.ready = false;
+    if (canRetry) {
+      if (activeRun) setState("running", "Retrying Python startup…");
+      loadPython(preparation, runtime === "site" ? "cdn" : "site", false);
+    } else {
+      preparedPython = null;
+      if (activeRun) finishRun(activeRun, {
+        error: "Python could not start from either runtime source. Check your connection and press Run to try again.",
+      });
+    }
+  }
+
+  const url = new URL("./python-worker.js", import.meta.url);
+  if (runtime === "cdn") url.searchParams.set("cdn", "1");
+  try {
+    worker = new Worker(url, { type: "module" });
+  } catch {
+    failed();
+    return;
+  }
+  preparation.worker = worker;
+  worker.onerror = failed;
+  worker.onmessage = ({ data }) => {
+    if (data.type === "unavailable") failed();
+    if (data.type !== "ready" || preparedPython !== preparation || preparation.worker !== worker) return;
+    window.clearTimeout(preparation.timeout);
+    preparation.ready = true;
+    preferredRuntime = runtime;
+    startPreparedRun();
+  };
+  preparation.timeout = window.setTimeout(failed, pythonLoadTimeout);
+}
+
+function startPreparedRun() {
+  const run = activeRun;
+  if (!run || !preparedPython?.ready) return;
+  const { worker } = preparedPython;
+  preparedPython = null;
+  run.worker = worker;
+  setState("running", "Running");
+  const failed = () => finishRun(run, { error: "The Python worker stopped responding. Press Run to try again." });
+  worker.onerror = failed;
+  worker.onmessage = ({ data }) => handleRunEvent(run, data);
+  run.timeout = window.setTimeout(failed, pythonLoadTimeout);
+  try {
+    worker.postMessage({ source: run.source, sharedInput: run.sharedInput });
+  } catch {
+    failed();
+  }
+}
+
+function runCode() {
   const source = code.value;
   if (activeRun || !source.trim()) return;
   if (source.length > 65536) {
@@ -488,6 +564,8 @@ async function runCode() {
     ? new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT + maxInputBytes)
     : null;
   const run = {
+    source,
+    sharedInput,
     created: performance.now(),
     remaining: 30000,
     queued: [],
@@ -503,27 +581,8 @@ async function runCode() {
   timing.textContent = "";
   setState("running", "Loading Python…");
   setRunning(true);
-  try {
-    await offlineCacheReady;
-    if (activeRun !== run) return;
-    const worker = new Worker(new URL("./python-worker.js", import.meta.url), { type: "module" });
-    run.worker = worker;
-    worker.onmessage = ({ data }) => handleRunEvent(run, data);
-    worker.onerror = () => {
-      const localhost = ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname);
-      finishRun(run, {
-        error: localhost
-          ? "The Python worker could not start. Restart the local preview with python3 server.py and refresh."
-          : "The Python worker could not start. Refresh the page and try again.",
-      });
-    };
-    run.timeout = window.setTimeout(() => {
-      finishRun(run, { error: "Python is taking too long to load. Check your connection and try again." });
-    }, 90000);
-    worker.postMessage({ source, sharedInput });
-  } catch {
-    handleRunEvent(run, { type: "unavailable" });
-  }
+  preparePython();
+  startPreparedRun();
 }
 
 runButton.addEventListener("click", () => {
@@ -538,3 +597,4 @@ document.addEventListener("keydown", (event) => {
 });
 
 drawEditor();
+preparePython();

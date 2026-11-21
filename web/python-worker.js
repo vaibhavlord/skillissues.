@@ -1,5 +1,6 @@
 const cdnRuntimeURL = "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/";
 const siteRuntimeURL = new URL("./runtime/v0.29.3/", import.meta.url).href;
+const runtimeURL = new URL(import.meta.url).searchParams.has("cdn") ? cdnRuntimeURL : siteRuntimeURL;
 const maxOutput = 256 * 1024;
 const waiting = -2;
 
@@ -52,7 +53,21 @@ install_console_input(set_console_prompt)
 run_script()
 `;
 
+async function loadPython() {
+  const { loadPyodide } = await import(runtimeURL + "pyodide.mjs");
+  return loadPyodide({ indexURL: runtimeURL, packageBaseUrl: cdnRuntimeURL });
+}
+
+const pythonReady = loadPython().then((pyodide) => {
+  self.postMessage({ type: "ready" });
+  return pyodide;
+}, () => {
+  self.postMessage({ type: "unavailable" });
+});
+
 self.addEventListener("message", async ({ data: { source, sharedInput } }) => {
+  const pyodide = await pythonReady;
+  if (!pyodide) return;
   const emit = self.postMessage.bind(self);
   const inputState = sharedInput ? new Int32Array(sharedInput, 0, 1) : null;
   const inputBytes = sharedInput ? new Uint8Array(sharedInput, Int32Array.BYTES_PER_ELEMENT) : null;
@@ -135,30 +150,14 @@ self.addEventListener("message", async ({ data: { source, sharedInput } }) => {
     return length;
   }
 
-  let pyodide;
-  let runtimeURL = siteRuntimeURL;
+  started = performance.now();
   try {
-    let loader;
-    try {
-      loader = await import(siteRuntimeURL + "pyodide.mjs");
-    } catch {
-      runtimeURL = cdnRuntimeURL;
-      loader = await import(cdnRuntimeURL + "pyodide.mjs");
-    }
-    pyodide = await loader.loadPyodide({ indexURL: runtimeURL, packageBaseUrl: cdnRuntimeURL });
     pyodide.setStdin({ read });
     pyodide.setStdout({ write });
     pyodide.setStderr({ write });
     pyodide.globals.set("set_console_prompt", setPrompt);
     pyodide.FS.writeFile("main.py", source);
-  } catch {
-    emit({ type: "unavailable" });
-    return;
-  }
-
-  started = performance.now();
-  emit({ type: "started" });
-  try {
+    emit({ type: "started" });
     done(pyodide.runPython(runScript));
   } catch (error) {
     output += error.message + "\n";

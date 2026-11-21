@@ -4,7 +4,7 @@
 
 ## How I built it
 
-- **Worker-based execution.** Pressing Play sends the source to a dedicated Web Worker. The worker loads Pyodide, writes the source to a virtual `main.py`, and runs it with `runpy.run_path()`. It streams stdout and stderr back to the output pane while the editor stays responsive. [Worker implementation](web/python-worker.js)
+- **Worker-based execution.** The page loads Pyodide in a standby Web Worker. Pressing Play sends the source to that worker, which writes a virtual `main.py` and runs it with `runpy.run_path()`. It streams stdout and stderr back to the output pane while the editor stays responsive. [Worker implementation](web/python-worker.js)
 - **Interactive input and output.** When Python reads input, the Input tab opens and focuses the cursor beside any `input()` prompt. Enter submits a reply, and Ctrl+D sends end of input. The worker waits on `Atomics.wait()`, and the page uses a `SharedArrayBuffer` and `Atomics.notify()` to resume it. When the run ends, the console opens Output to show stdout and stderr. Live input uses the cross-origin isolation headers included for local preview and hosting. [Console and input handling](web/app.js)
 - **Stop and reset.** Stop terminates the worker, including when a script is stuck in a loop or waiting for input. A new worker per run gives each script a fresh Python runtime and virtual filesystem. Execution and output limits keep runaway programs from flooding the console. [Run lifecycle](web/app.js)
 - **Editor.** The syntax highlighter classifies Python tokens for display. The editor also handles indentation, matching brackets and quotes, and saving code in browser storage. [Syntax highlighter](web/highlight.js)
@@ -31,4 +31,4 @@ Open [localhost:4173](http://127.0.0.1:4173/). If you have the old preview runni
 
 Vercel runs `npm run build` to include Pyodide in the static deployment. To include the same files in your local preview or on another static host, run `npm install` and `npm run build` before serving `web/`.
 
-The browser prefers the site's copy of Python and falls back to jsDelivr when a bundled copy is unavailable. On HTTPS and localhost, a service worker keeps the app and downloaded Python files in the browser's Cache Storage. Run once while connected to set up offline use. An uncached runtime and additional Python packages may need a network connection, and clearing site data removes the offline copy.
+Python starts loading when the editor opens. If the site's copy fails to initialize or stalls, the app tries jsDelivr in a fresh worker. Vercel serves the versioned runtime files with long-lived browser caching. On HTTPS and localhost, a service worker keeps the app and downloaded Python files in the browser's Cache Storage. Run once while connected to set up offline use. An uncached runtime and additional Python packages may need a network connection, and clearing site data removes the offline copy.
