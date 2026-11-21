@@ -1,6 +1,7 @@
 import { highlight } from "./highlight.js";
 
 const starterCode = 'print("Hello, Python!")\n';
+const indentWidth = 4;
 const matchingPairs = { "(": ")", "[": "]", "{": "}", "'": "'", '"': '"' };
 const closingCharacters = new Set(Object.values(matchingPairs));
 
@@ -157,6 +158,21 @@ function deleteMatchingPair(event) {
   return true;
 }
 
+function deleteIndentation(event) {
+  const { value, selectionStart: start, selectionEnd: end } = code;
+  if (start !== end || start === 0) return false;
+
+  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+  const indent = value.slice(lineStart, start);
+  if (!/^[ \t]+$/.test(indent)) return false;
+
+  const trailingSpaces = indent.length - indent.lastIndexOf("\t") - 1;
+  const width = trailingSpaces ? (trailingSpaces % indentWidth || indentWidth) : 1;
+  event.preventDefault();
+  deleteRange(start - width, start);
+  return true;
+}
+
 function editMatchingPair(event) {
   const key = event.key;
   if (key === "Backspace") return deleteMatchingPair(event);
@@ -203,14 +219,14 @@ code.addEventListener("keydown", (event) => {
     leaveEditor = true;
     return;
   }
-  if (editMatchingPair(event)) {
+  if (editMatchingPair(event) || (event.key === "Backspace" && deleteIndentation(event))) {
     leaveEditor = false;
     return;
   }
   if (event.key === "Tab" && !leaveEditor && !event.shiftKey) {
     event.preventDefault();
     const column = code.value.slice(0, code.selectionStart).split("\n").at(-1).length;
-    insertAtSelection(" ".repeat(4 - (column % 4)));
+    insertAtSelection(" ".repeat(indentWidth - (column % indentWidth)));
   }
   if (event.key === "Enter") {
     const { value, selectionStart: start, selectionEnd: end } = code;
@@ -218,13 +234,14 @@ code.addEventListener("keydown", (event) => {
     const lineStart = before.lastIndexOf("\n") + 1;
     const line = before.slice(lineStart);
     event.preventDefault();
-    if (!event.shiftKey && !activeRun && start === end && end === value.length
-      && line === "r" && value.slice(0, lineStart).trim()) {
-      deleteRange(start - 1, start);
-      runCode();
+    if (!event.shiftKey && !activeRun && start === end && line.trim() === "r"
+      && !value.slice(end).trim() && value.slice(0, lineStart).trim()) {
+      const nextLine = value.indexOf("\n", end);
+      deleteRange(lineStart, nextLine === -1 ? value.length : nextLine);
+      runCode({ fromRShortcut: true });
     } else {
       const indent = line.match(/^[\t ]*/)[0];
-      insertAtSelection("\n" + indent + (line.trimEnd().endsWith(":") ? "    " : ""));
+      insertAtSelection("\n" + indent + (line.trimEnd().endsWith(":") ? " ".repeat(indentWidth) : ""));
     }
   }
   leaveEditor = false;
@@ -426,8 +443,11 @@ function finishRun(run, event) {
   } else if (event.exitCode !== 0) {
     const exitMessage = "Exited with code " + event.exitCode;
     const output = transcript.textContent;
-    const prefix = output ? (output.endsWith("\n") ? "" : "\n") : exitMessage + "\n";
-    showOutput(prefix + "LAUDE ITNA BHI NHI ATA KYA !!!!!\n", "error");
+    if (!output) showOutput(exitMessage + "\n", "error");
+    if (run.fromRShortcut) {
+      const prefix = output && !output.endsWith("\n") ? "\n" : "";
+      showOutput(prefix + "LAUDE ITNA BHI NHI ATA KYA !!!!!\n", "error");
+    }
     setState("error", exitMessage);
   } else {
     if (!transcript.hasChildNodes()) showOutput("Program finished without output.\n", "message");
@@ -553,7 +573,7 @@ function startPreparedRun() {
   }
 }
 
-function runCode() {
+function runCode({ fromRShortcut = false } = {}) {
   const source = code.value;
   if (activeRun || !source.trim()) return;
   if (source.length > 65536) {
@@ -566,6 +586,7 @@ function runCode() {
   const run = {
     source,
     sharedInput,
+    fromRShortcut,
     created: performance.now(),
     remaining: 30000,
     queued: [],
