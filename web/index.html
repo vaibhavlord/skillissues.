@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Run Python in your browser with a syntax-highlighted editor and interactive console.">
+  <title>skillissues — Python Playground</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <svg class="icons" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.9 13.35A9 9 0 0 1 10.65 3.1 9 9 0 1 0 20.9 13.35Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5 19 12 8 18.5Z" fill="currentColor" stroke-linejoin="round"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect width="11" height="11" x="6.5" y="6.5" rx="1" fill="currentColor"/></symbol>
+    <symbol id="i-cli" viewBox="0 0 24 24"><path d="m5 7 5 5-5 5m8 0h6"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6Z M14 3v6h5M10 13l-2 2 2 2m5-4 2 2-2 2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-clear" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3" stroke-linejoin="round"/></symbol>
+  </svg>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <div class="brand">
+        <img src="./icon.svg" alt="" width="34" height="34">
+        <span>skillissues<span class="brand-period" aria-hidden="true">.</span></span>
+      </div>
+      <div class="theme-switch" role="group" aria-label="Color theme">
+        <button type="button" data-theme-choice="light" title="Light theme" aria-label="Light theme" aria-pressed="false">
+          <svg class="icon"><use href="#i-sun"/></svg>
+        </button>
+        <button type="button" data-theme-choice="dark" title="Dark theme" aria-label="Dark theme" aria-pressed="true">
+          <svg class="icon"><use href="#i-moon"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell main">
+    <div class="workbench">
+      <section class="pane editor-pane" aria-labelledby="editor-title">
+        <header class="pane-header editor-header">
+          <div class="file-tab">
+            <svg class="icon"><use href="#i-file"/></svg>
+            <h2 id="editor-title">main.py</h2>
+          </div>
+          <div class="editor-actions">
+            <span class="pane-meta">Python</span>
+            <button id="run" type="button" class="run-button" aria-label="Run code" title="Run code">
+              <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>
+            </button>
+          </div>
+        </header>
+        <div class="editor-body">
+          <div id="gutter" aria-hidden="true"></div>
+          <div class="editor-area">
+            <div id="code-paint" aria-hidden="true"><div id="code-lines"></div></div>
+            <textarea id="code" aria-label="Python code editor" autocomplete="off" autocapitalize="off"
+              spellcheck="false" wrap="off" aria-describedby="editor-help"></textarea>
+            <span class="sr-only" id="editor-help">Press Escape and then Tab to leave the editor. Press Control or Command and Enter to run.</span>
+          </div>
+        </div>
+        <footer class="pane-footer">
+          <span id="cursor">Ln 1, Col 1</span>
+          <span>Spaces: 4</span>
+        </footer>
+      </section>
+
+      <section class="pane console-pane" aria-label="Console">
+        <header class="pane-header console-header">
+          <div class="console-tabs" role="tablist" aria-label="Console views">
+            <button type="button" id="output-tab" role="tab" aria-selected="true" aria-controls="output-panel">Output</button>
+            <button type="button" id="input-tab" role="tab" aria-selected="false" aria-controls="input-panel" tabindex="-1">Input</button>
+          </div>
+          <div class="console-actions" id="output-actions">
+            <button type="button" id="copy" class="tool-button" aria-label="Copy console output" title="Copy output" disabled>
+              <svg class="icon"><use href="#i-copy"/></svg>
+            </button>
+            <button type="button" id="clear" class="tool-button" aria-label="Clear console output" title="Clear output" disabled>
+              <svg class="icon"><use href="#i-clear"/></svg>
+            </button>
+          </div>
+        </header>
+        <div class="console-body" id="output-panel" role="tabpanel" aria-labelledby="output-tab" tabindex="0">
+          <div class="empty" id="console-empty">
+            <div class="empty-icon"><svg class="icon"><use href="#i-cli"/></svg></div>
+            <p>Ready to run</p>
+          </div>
+          <div id="transcript" role="log" aria-label="Program output" aria-live="polite"></div>
+        </div>
+        <form id="input-panel" class="input-panel" role="tabpanel" aria-labelledby="input-tab" hidden>
+          <textarea id="stdin" aria-label="Program input" aria-describedby="stdin-help"
+            placeholder="Type or paste input, one line per read." autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+          <div class="input-tools">
+            <span id="stdin-help">Input is sent when your program reads it.</span>
+            <div class="input-actions" id="input-actions" hidden>
+              <button type="submit">Send</button>
+              <button id="eof" type="button" title="Send typed lines, then end input (Ctrl+D)" aria-label="Send end of input">EOF</button>
+            </div>
+          </div>
+        </form>
+        <footer class="pane-footer">
+          <span id="run-state" class="run-state" data-state="idle" role="status"><i></i><span>Idle</span></span>
+          <span id="timing"></span>
+        </footer>
+      </section>
+    </div>
+
+    <footer class="workspace-footer">
+      <span id="runtime">Python · Runs in your browser</span>
+      <span id="notice" role="status"></span>
+    </footer>
+  </main>
+</body>
+</html>
