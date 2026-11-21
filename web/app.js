@@ -132,6 +132,14 @@ function insertAtSelection(text) {
   editorChanged();
 }
 
+function deleteRange(start, end) {
+  code.setSelectionRange(start, end);
+  // Use the browser's undo stack when supported.
+  if (document.execCommand("delete")) return;
+  code.setRangeText("", start, end, "end");
+  editorChanged();
+}
+
 function deleteMatchingPair(event) {
   const { value, selectionStart: start, selectionEnd: end } = code;
   const opening = value[start - 1];
@@ -142,12 +150,7 @@ function deleteMatchingPair(event) {
     && value.slice(start - 3, start + 3) === opening.repeat(6);
   const width = triple ? 3 : 1;
   event.preventDefault();
-  code.setSelectionRange(start - width, start + width);
-  // Keep the deletion together in the browser's undo history.
-  if (!document.execCommand("delete")) {
-    code.setRangeText("", start - width, start + width, "end");
-    editorChanged();
-  }
+  deleteRange(start - width, start + width);
   return true;
 }
 
@@ -207,10 +210,19 @@ code.addEventListener("keydown", (event) => {
     insertAtSelection(" ".repeat(4 - (column % 4)));
   }
   if (event.key === "Enter") {
-    const line = code.value.slice(0, code.selectionStart).split("\n").at(-1);
-    const indent = line.match(/^[\t ]*/)[0];
+    const { value, selectionStart: start, selectionEnd: end } = code;
+    const before = value.slice(0, start);
+    const lineStart = before.lastIndexOf("\n") + 1;
+    const line = before.slice(lineStart);
     event.preventDefault();
-    insertAtSelection("\n" + indent + (line.trimEnd().endsWith(":") ? "    " : ""));
+    if (!event.shiftKey && !activeRun && start === end && end === value.length
+      && line === "r" && value.slice(0, lineStart).trim()) {
+      deleteRange(start - 1, start);
+      runCode();
+    } else {
+      const indent = line.match(/^[\t ]*/)[0];
+      insertAtSelection("\n" + indent + (line.trimEnd().endsWith(":") ? "    " : ""));
+    }
   }
   leaveEditor = false;
 });
@@ -466,8 +478,9 @@ function handleRunEvent(run, event) {
 }
 
 async function runCode() {
-  if (activeRun || !code.value.trim()) return;
-  if (code.value.length > 65536) {
+  const source = code.value;
+  if (activeRun || !source.trim()) return;
+  if (source.length > 65536) {
     announce("Code is limited to 65,536 characters");
     return;
   }
@@ -507,7 +520,7 @@ async function runCode() {
     run.timeout = window.setTimeout(() => {
       finishRun(run, { error: "Python is taking too long to load. Check your connection and try again." });
     }, 90000);
-    worker.postMessage({ source: code.value, sharedInput });
+    worker.postMessage({ source, sharedInput });
   } catch {
     handleRunEvent(run, { type: "unavailable" });
   }
