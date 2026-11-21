@@ -68,13 +68,10 @@
         </footer>
       </section>
 
-      <section class="pane console-pane" aria-label="Console">
+      <section class="pane console-pane" aria-labelledby="output-heading">
         <header class="pane-header console-header">
-          <div class="console-tabs" role="tablist" aria-label="Console views">
-            <button type="button" id="output-tab" role="tab" aria-selected="true" aria-controls="output-panel">Output</button>
-            <button type="button" id="input-tab" role="tab" aria-selected="false" aria-controls="input-panel" tabindex="-1">Input</button>
-          </div>
-          <div class="console-actions" id="output-actions">
+          <h2 id="output-heading" class="console-heading">Output</h2>
+          <div class="console-actions">
             <button type="button" id="copy" class="tool-button" aria-label="Copy console output" title="Copy output" disabled>
               <svg class="icon"><use href="#i-copy"/></svg>
             </button>
@@ -83,24 +80,14 @@
             </button>
           </div>
         </header>
-        <div class="console-body" id="output-panel" role="tabpanel" aria-labelledby="output-tab" tabindex="0">
+        <div class="console-body" id="output-panel" tabindex="0">
           <div class="empty" id="console-empty">
             <div class="empty-icon"><svg class="icon"><use href="#i-cli"/></svg></div>
             <p>Ready to run</p>
           </div>
-          <div id="transcript" role="log" aria-label="Program output" aria-live="polite"></div>
+          <div class="console-stream"><span id="transcript" role="log" aria-label="Program output" aria-live="polite"></span><textarea id="live-stdin" rows="1" aria-label="Console input"
+            autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" hidden></textarea></div>
         </div>
-        <form id="input-panel" class="input-panel" role="tabpanel" aria-labelledby="input-tab" hidden>
-          <textarea id="stdin" aria-label="Program input" aria-describedby="stdin-help"
-            placeholder="Type or paste input, one line per read." autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
-          <div class="input-tools">
-            <span id="stdin-help">Input is sent when your program reads it.</span>
-            <div class="input-actions" id="input-actions" hidden>
-              <button type="submit">Send</button>
-              <button id="eof" type="button" title="Send typed lines, then end input (Ctrl+D)" aria-label="Send end of input">EOF</button>
-            </div>
-          </div>
-        </form>
         <footer class="pane-footer">
           <span id="run-state" class="run-state" data-state="idle" role="status"><i></i><span>Idle</span></span>
           <span id="timing"></span>

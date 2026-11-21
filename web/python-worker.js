@@ -35,14 +35,13 @@ def run_script():
 run_script()
 `;
 
-self.addEventListener("message", async ({ data: { source, lines, sharedInput } }) => {
+self.addEventListener("message", async ({ data: { source, sharedInput } }) => {
   const emit = self.postMessage.bind(self);
   const inputState = sharedInput ? new Int32Array(sharedInput, 0, 1) : null;
   const inputBytes = sharedInput ? new Uint8Array(sharedInput, Int32Array.BYTES_PER_ELEMENT) : null;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const inputDecoder = new TextDecoder();
-  let lineIndex = 0;
   let remainder = new Uint8Array();
   let inputEnded = false;
   let output = "";
@@ -58,12 +57,12 @@ self.addEventListener("message", async ({ data: { source, lines, sharedInput } }
     lastFlush = performance.now();
   }
 
-  function done(exitCode, message) {
+  function done(exitCode, details) {
     if (stopped) return;
     stopped = true;
     output += decoder.decode();
     flushOutput();
-    emit({ type: "done", exitCode, message, milliseconds: Math.round(performance.now() - started) });
+    emit({ type: "done", exitCode, milliseconds: Math.round(performance.now() - started), ...details });
   }
 
   function write(buffer) {
@@ -71,14 +70,17 @@ self.addEventListener("message", async ({ data: { source, lines, sharedInput } }
     const accepted = Math.min(buffer.length, maxOutput - outputBytes);
     outputBytes += accepted;
     output += decoder.decode(buffer.subarray(0, accepted), { stream: true });
-    if (accepted < buffer.length) done(1, "Run stopped after reaching the console output limit.");
+    if (accepted < buffer.length) done(1, { message: "Run stopped after reaching the console output limit." });
     else if (output.length >= 4096 || performance.now() - lastFlush >= 25) flushOutput();
     return buffer.length;
   }
 
   function readLine() {
-    if (lineIndex < lines.length) return lines[lineIndex++];
-    if (inputEnded || !inputState) return null;
+    if (inputEnded) return null;
+    if (!inputState) {
+      done(1, { error: "Console input needs a cross-origin-isolated preview. Open the localhost preview or use the included hosting headers." });
+      return null;
+    }
     flushOutput();
     Atomics.store(inputState, 0, waiting);
     emit({ type: "input" });

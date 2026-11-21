@@ -4,8 +4,8 @@
 
 ## How I built it
 
-- **Worker-based execution.** Pressing Play sends the source and prepared input lines to a dedicated Web Worker. The worker loads Pyodide, writes the source to a virtual `main.py`, and runs it with `runpy.run_path()`. It streams stdout and stderr back to the output pane while the editor stays responsive. [Worker implementation](web/python-worker.js)
-- **Multiline and interactive input.** The worker reads staged input first. If Python calls `input()` again, the worker can block on `Atomics.wait()` while the page stays responsive. The page writes the next UTF-8 line to a `SharedArrayBuffer` and calls `Atomics.notify()` to resume execution. Static hosts without cross-origin isolation use batch input. [Console and input handling](web/app.js)
+- **Worker-based execution.** Pressing Play sends the source to a dedicated Web Worker. The worker loads Pyodide, writes the source to a virtual `main.py`, and runs it with `runpy.run_path()`. It streams stdout and stderr back to the output pane while the editor stays responsive. [Worker implementation](web/python-worker.js)
+- **Interactive output console.** When Python reads input, the cursor appears in the Output pane beside any prompt. Enter submits a reply, and Ctrl+D sends end of input. The worker waits on `Atomics.wait()`, and the page uses a `SharedArrayBuffer` and `Atomics.notify()` to resume it. Live input uses the cross-origin isolation headers included for local preview and hosting. [Console and input handling](web/app.js)
 - **Stop and reset.** Stop terminates the worker, including when a script is stuck in a loop or waiting for input. A new worker per run gives each script a fresh Python runtime and virtual filesystem. Execution and output limits keep runaway programs from flooding the console. [Run lifecycle](web/app.js)
 - **Editor.** The syntax highlighter classifies Python tokens for display. The editor also handles indentation, matching brackets and quotes, and saving code in browser storage. [Syntax highlighter](web/highlight.js)
 

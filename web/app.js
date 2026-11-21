@@ -12,14 +12,9 @@ const codeLines = byId("code-lines");
 const cursor = byId("cursor");
 const runButton = byId("run");
 const outputPanel = byId("output-panel");
-const inputPanel = byId("input-panel");
-const outputActions = byId("output-actions");
-const inputActions = byId("input-actions");
-const stdinHelp = byId("stdin-help");
-const consoleTabs = [byId("output-tab"), byId("input-tab")];
 const transcript = byId("transcript");
+const liveStdin = byId("live-stdin");
 const empty = byId("console-empty");
-const stdin = byId("stdin");
 const state = byId("run-state");
 const timing = byId("timing");
 const copyButton = byId("copy");
@@ -29,9 +24,6 @@ const runtimeLabel = byId("runtime");
 const maxInputBytes = 4096;
 const canUseLiveInput = window.crossOriginIsolated && typeof SharedArrayBuffer === "function";
 const encoder = new TextEncoder();
-if (!canUseLiveInput) {
-  stdinHelp.textContent = "Enter all input before running. This page uses batch input.";
-}
 const themeButtons = document.querySelectorAll("[data-theme-choice]");
 const mac = /Mac|iPad|iPhone/.test(navigator.platform);
 const runTooltip = mac ? "Run code (⌘ + Enter)" : "Run code (Ctrl + Enter)";
@@ -285,55 +277,24 @@ function setRunning(running) {
   runButton.disabled = !running && !code.value.trim();
 }
 
-function selectConsoleTab(tab) {
-  const inputSelected = tab === consoleTabs[1];
-  for (const item of consoleTabs) {
-    item.setAttribute("aria-selected", String(item === tab));
-    item.tabIndex = item === tab ? 0 : -1;
-  }
-  inputPanel.hidden = !inputSelected;
-  outputActions.hidden = outputPanel.hidden = inputSelected;
-  if (!inputSelected) scrollConsole();
-}
-
-for (const [index, tab] of consoleTabs.entries()) {
-  tab.addEventListener("click", () => selectConsoleTab(tab));
-  tab.addEventListener("keydown", (event) => {
-    const destinations = { ArrowLeft: 1 - index, ArrowRight: 1 - index, Home: 0, End: 1 };
-    if (!Object.hasOwn(destinations, event.key)) return;
-    event.preventDefault();
-    const target = consoleTabs[destinations[event.key]];
-    selectConsoleTab(target);
-    target.focus();
-  });
-}
-
-function updateInputControls() {
-  const waiting = !!activeRun?.waiting;
-  stdin.readOnly = !!activeRun && !waiting;
-  inputActions.hidden = !waiting;
-  stdinHelp.textContent = waiting
-    ? activeRun.prompt || "Python is waiting for input."
-    : canUseLiveInput
-      ? "Input is sent when your program reads it."
-      : "Enter all input before running. This page uses batch input.";
-}
-
-function showInput(run) {
-  run.prompt = transcript.textContent.split("\n").at(-1).trim().slice(0, 160);
-  stdin.value = "";
-  updateInputControls();
+function showInput() {
+  liveStdin.value = "";
+  liveStdin.rows = 1;
+  liveStdin.hidden = false;
   setState("input", "Waiting for input");
-  selectConsoleTab(consoleTabs[1]);
-  stdin.focus({ preventScroll: true });
+  liveStdin.focus({ preventScroll: true });
+  scrollConsole();
   if (window.matchMedia("(max-width: 720px)").matches) {
-    inputPanel.scrollIntoView({ block: "nearest" });
+    liveStdin.scrollIntoView({ block: "nearest" });
   }
 }
 
 function writeInput(run, value) {
   const bytes = value === null ? null : encoder.encode(value);
-  if (bytes) run.inputBytes.set(bytes);
+  if (bytes) {
+    run.inputBytes.set(bytes);
+    showOutput(value + "\n", "input-echo");
+  }
   Atomics.store(run.inputState, 0, bytes?.length ?? -1);
   Atomics.notify(run.inputState, 0);
   resumeRunClock(run);
@@ -353,31 +314,38 @@ function inputLines(value) {
 function queueInput(endInput = false) {
   const run = activeRun;
   if (!run?.waiting) return;
-  const lines = endInput && !stdin.value ? [] : inputLines(stdin.value);
+  const lines = endInput && !liveStdin.value ? [] : inputLines(liveStdin.value);
   if (!lines) return;
   if (endInput) lines.push(null);
   run.queued = lines;
   run.nextLine = 0;
   run.waiting = false;
-  const focusWasInInput = inputPanel.contains(document.activeElement);
-  selectConsoleTab(consoleTabs[0]);
-  if (focusWasInInput) outputPanel.focus({ preventScroll: true });
-  updateInputControls();
+  hideInput();
   setState("running", "Running");
   writeInput(run, run.queued[run.nextLine++]);
 }
 
-inputPanel.addEventListener("submit", (event) => {
-  event.preventDefault();
-  queueInput();
+function hideInput() {
+  const hadFocus = document.activeElement === liveStdin;
+  liveStdin.hidden = true;
+  if (hadFocus) outputPanel.focus({ preventScroll: true });
+}
+
+outputPanel.addEventListener("click", (event) => {
+  if (event.target === outputPanel && activeRun?.waiting) {
+    liveStdin.focus({ preventScroll: true });
+  }
 });
-byId("eof").addEventListener("click", () => { queueInput(true); });
-stdin.addEventListener("keydown", (event) => {
+liveStdin.addEventListener("input", () => {
+  liveStdin.rows = Math.min(5, liveStdin.value.split("\n").length);
+  scrollConsole();
+});
+liveStdin.addEventListener("keydown", (event) => {
   if (event.isComposing) return;
   if (event.ctrlKey && event.key.toLowerCase() === "d" && activeRun?.waiting) {
     event.preventDefault();
     queueInput(true);
-  } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && activeRun?.waiting) {
+  } else if (event.key === "Enter" && !event.shiftKey && activeRun?.waiting) {
     event.preventDefault();
     event.stopPropagation();
     queueInput();
@@ -388,12 +356,9 @@ function finishRun(run, event) {
   if (activeRun !== run) return;
   window.clearTimeout(run.timeout);
   run.worker?.terminate();
-  const focusWasInInput = inputPanel.contains(document.activeElement);
   activeRun = null;
-  updateInputControls();
-  selectConsoleTab(consoleTabs[0]);
+  hideInput();
   setRunning(false);
-  if (focusWasInInput) outputPanel.focus({ preventScroll: true });
   if (run.runtime) updateRuntimeLabel(run.runtime.version, run.runtime.runtimeURL);
 
   if (event.error) {
@@ -455,7 +420,7 @@ function handleRunEvent(run, event) {
         window.clearTimeout(run.timeout);
         run.timeout = window.setTimeout(() => stopRun("Input timed out."), 300000);
         run.waiting = true;
-        showInput(run);
+        showInput();
       }
       break;
     case "done":
@@ -473,12 +438,6 @@ async function runCode() {
     announce("Code is limited to 65,536 characters");
     return;
   }
-  const lines = stdin.value ? inputLines(stdin.value) : [];
-  if (!lines) {
-    selectConsoleTab(consoleTabs[1]);
-    stdin.focus();
-    return;
-  }
   const sharedInput = canUseLiveInput
     ? new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT + maxInputBytes)
     : null;
@@ -491,11 +450,7 @@ async function runCode() {
     inputState: sharedInput ? new Int32Array(sharedInput, 0, 1) : null,
     inputBytes: sharedInput ? new Uint8Array(sharedInput, Int32Array.BYTES_PER_ELEMENT) : null,
   };
-  const focusWasInInput = inputPanel.contains(document.activeElement);
   activeRun = run;
-  selectConsoleTab(consoleTabs[0]);
-  if (focusWasInInput) outputPanel.focus({ preventScroll: true });
-  updateInputControls();
   clearOutput();
   timing.textContent = "";
   setState("running", "Loading Python…");
@@ -517,7 +472,7 @@ async function runCode() {
     run.timeout = window.setTimeout(() => {
       finishRun(run, { error: "Python is taking too long to load. Check your connection and try again." });
     }, 90000);
-    worker.postMessage({ source: code.value, lines, sharedInput });
+    worker.postMessage({ source: code.value, sharedInput });
   } catch {
     handleRunEvent(run, { type: "unavailable" });
   }
