@@ -11,7 +11,12 @@ const paint = byId("code-paint");
 const codeLines = byId("code-lines");
 const cursor = byId("cursor");
 const runButton = byId("run");
+const inputTab = byId("input-tab");
+const outputTab = byId("output-tab");
+const inputPanel = byId("input-panel");
 const outputPanel = byId("output-panel");
+const consoleActions = byId("console-actions");
+const inputTranscript = byId("input-transcript");
 const transcript = byId("transcript");
 const liveStdin = byId("live-stdin");
 const empty = byId("console-empty");
@@ -20,7 +25,6 @@ const timing = byId("timing");
 const copyButton = byId("copy");
 const clearButton = byId("clear");
 const notice = byId("notice");
-const runtimeLabel = byId("runtime");
 const maxInputBytes = 4096;
 const canUseLiveInput = window.crossOriginIsolated && typeof SharedArrayBuffer === "function";
 const encoder = new TextEncoder();
@@ -58,21 +62,6 @@ function prepareOfflineCache() {
 }
 
 const offlineCacheReady = prepareOfflineCache();
-
-async function updateRuntimeLabel(version, runtimeURL) {
-  const onlineLabel = "Python " + version + " · Runs in your browser";
-  runtimeLabel.textContent = onlineLabel;
-  if (!navigator.serviceWorker?.controller || !window.caches) return;
-  const files = ["pyodide.mjs", "pyodide.asm.js", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json"];
-  try {
-    const saved = await Promise.all(files.map((file) => window.caches.match(new URL(file, runtimeURL).href)));
-    if (runtimeLabel.textContent === onlineLabel && saved.every(Boolean)) {
-      runtimeLabel.textContent = "Python " + version + " · Ready offline";
-    }
-  } catch {
-    // The runtime can still work online if storage is unavailable.
-  }
-}
 
 function readSetting(key) {
   try {
@@ -237,8 +226,46 @@ function setState(kind, label) {
   state.lastElementChild.textContent = label;
 }
 
-function scrollConsole() {
-  outputPanel.scrollTop = outputPanel.scrollHeight;
+function scrollConsole(panel) {
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function selectConsoleTab(tab) {
+  const isInput = tab === inputTab;
+  const visiblePanel = isInput ? inputPanel : outputPanel;
+  const hiddenPanel = isInput ? outputPanel : inputPanel;
+  const otherTab = isInput ? outputTab : inputTab;
+  const moveFocus = hiddenPanel.contains(document.activeElement);
+  const moveTabFocus = document.activeElement === otherTab;
+  tab.setAttribute("aria-selected", "true");
+  tab.tabIndex = 0;
+  otherTab.setAttribute("aria-selected", "false");
+  otherTab.tabIndex = -1;
+  visiblePanel.hidden = false;
+  hiddenPanel.hidden = true;
+  consoleActions.hidden = isInput;
+  scrollConsole(visiblePanel);
+  if (moveFocus) visiblePanel.focus({ preventScroll: true });
+  if (moveTabFocus) tab.focus({ preventScroll: true });
+}
+
+for (const tab of [inputTab, outputTab]) {
+  tab.addEventListener("click", () => {
+    selectConsoleTab(tab);
+    if (tab === inputTab && activeRun?.waiting) focusInput();
+  });
+  tab.addEventListener("keydown", (event) => {
+    let nextTab;
+    if (event.key === "Home") nextTab = inputTab;
+    if (event.key === "End") nextTab = outputTab;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      nextTab = tab === inputTab ? outputTab : inputTab;
+    }
+    if (!nextTab) return;
+    event.preventDefault();
+    selectConsoleTab(nextTab);
+    nextTab.focus({ preventScroll: true });
+  });
 }
 
 function showOutput(text, className) {
@@ -246,7 +273,7 @@ function showOutput(text, className) {
   const node = className ? Object.assign(document.createElement("span"), { className, textContent: text }) : document.createTextNode(text);
   transcript.append(node);
   copyButton.disabled = clearButton.disabled = false;
-  scrollConsole();
+  scrollConsole(outputPanel);
 }
 
 function clearOutput() {
@@ -282,8 +309,13 @@ function showInput() {
   liveStdin.rows = 1;
   liveStdin.hidden = false;
   setState("input", "Waiting for input");
+  selectConsoleTab(inputTab);
+  focusInput();
+}
+
+function focusInput() {
   liveStdin.focus({ preventScroll: true });
-  scrollConsole();
+  scrollConsole(inputPanel);
   if (window.matchMedia("(max-width: 720px)").matches) {
     liveStdin.scrollIntoView({ block: "nearest" });
   }
@@ -293,7 +325,11 @@ function writeInput(run, value) {
   const bytes = value === null ? null : encoder.encode(value);
   if (bytes) {
     run.inputBytes.set(bytes);
-    showOutput(value + "\n", "input-echo");
+    const echo = document.createElement("span");
+    echo.className = "input-echo";
+    echo.textContent = value + "\n";
+    inputTranscript.append(echo);
+    scrollConsole(inputPanel);
   }
   Atomics.store(run.inputState, 0, bytes?.length ?? -1);
   Atomics.notify(run.inputState, 0);
@@ -328,17 +364,15 @@ function queueInput(endInput = false) {
 function hideInput() {
   const hadFocus = document.activeElement === liveStdin;
   liveStdin.hidden = true;
-  if (hadFocus) outputPanel.focus({ preventScroll: true });
+  if (hadFocus) inputPanel.focus({ preventScroll: true });
 }
 
-outputPanel.addEventListener("click", (event) => {
-  if (event.target === outputPanel && activeRun?.waiting) {
-    liveStdin.focus({ preventScroll: true });
-  }
+inputPanel.addEventListener("click", (event) => {
+  if (event.target === inputPanel && activeRun?.waiting) focusInput();
 });
 liveStdin.addEventListener("input", () => {
   liveStdin.rows = Math.min(5, liveStdin.value.split("\n").length);
-  scrollConsole();
+  scrollConsole(inputPanel);
 });
 liveStdin.addEventListener("keydown", (event) => {
   if (event.isComposing) return;
@@ -358,8 +392,8 @@ function finishRun(run, event) {
   run.worker?.terminate();
   activeRun = null;
   hideInput();
+  selectConsoleTab(outputTab);
   setRunning(false);
-  if (run.runtime) updateRuntimeLabel(run.runtime.version, run.runtime.runtimeURL);
 
   if (event.error) {
     showOutput(event.error + "\n", "error");
@@ -404,8 +438,6 @@ function handleRunEvent(run, event) {
   switch (event.type) {
     case "started":
       run.started = performance.now();
-      run.runtime = event;
-      updateRuntimeLabel(event.version, event.runtimeURL);
       resumeRunClock(run);
       setState("running", "Running");
       break;
@@ -413,6 +445,7 @@ function handleRunEvent(run, event) {
       showOutput(event.text);
       break;
     case "input":
+      if (event.prompt) inputTranscript.append(event.prompt);
       run.remaining = Math.max(0, run.deadline - performance.now());
       if (run.nextLine < run.queued.length) {
         writeInput(run, run.queued[run.nextLine++]);
@@ -451,6 +484,8 @@ async function runCode() {
     inputBytes: sharedInput ? new Uint8Array(sharedInput, Int32Array.BYTES_PER_ELEMENT) : null,
   };
   activeRun = run;
+  inputTranscript.replaceChildren();
+  selectConsoleTab(outputTab);
   clearOutput();
   timing.textContent = "";
   setState("running", "Loading Python…");

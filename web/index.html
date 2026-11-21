@@ -22,7 +22,7 @@
     <symbol id="i-clear" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3" stroke-linejoin="round"/></symbol>
   </svg>
   <header class="topbar">
-    <div class="shell topbar-inner">
+    <div class="topbar-inner">
       <div class="brand">
         <img src="./icon.svg" alt="" width="34" height="34">
         <span>skillissues<span class="brand-period" aria-hidden="true">.</span></span>
@@ -38,7 +38,7 @@
     </div>
   </header>
 
-  <main class="shell main">
+  <main class="main">
     <div class="workbench">
       <section class="pane editor-pane" aria-labelledby="editor-title">
         <header class="pane-header editor-header">
@@ -68,10 +68,13 @@
         </footer>
       </section>
 
-      <section class="pane console-pane" aria-labelledby="output-heading">
+      <section class="pane console-pane" aria-label="Python console">
         <header class="pane-header console-header">
-          <h2 id="output-heading" class="console-heading">Output</h2>
-          <div class="console-actions">
+          <div class="console-tabs" role="tablist" aria-label="Console">
+            <button type="button" id="input-tab" role="tab" aria-controls="input-panel" aria-selected="false" tabindex="-1">Input</button>
+            <button type="button" id="output-tab" role="tab" aria-controls="output-panel" aria-selected="true">Output</button>
+          </div>
+          <div class="console-actions" id="console-actions">
             <button type="button" id="copy" class="tool-button" aria-label="Copy console output" title="Copy output" disabled>
               <svg class="icon"><use href="#i-copy"/></svg>
             </button>
@@ -80,13 +83,16 @@
             </button>
           </div>
         </header>
-        <div class="console-body" id="output-panel" tabindex="0">
+        <div class="console-body" id="input-panel" role="tabpanel" aria-labelledby="input-tab" tabindex="0" hidden>
+          <div class="console-stream"><span id="input-transcript" role="log" aria-label="Program input"></span><textarea id="live-stdin" rows="1" aria-label="Console input"
+            autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" hidden></textarea></div>
+        </div>
+        <div class="console-body" id="output-panel" role="tabpanel" aria-labelledby="output-tab" tabindex="0">
           <div class="empty" id="console-empty">
             <div class="empty-icon"><svg class="icon"><use href="#i-cli"/></svg></div>
             <p>Ready to run</p>
           </div>
-          <div class="console-stream"><span id="transcript" role="log" aria-label="Program output" aria-live="polite"></span><textarea id="live-stdin" rows="1" aria-label="Console input"
-            autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" hidden></textarea></div>
+          <div class="console-stream" id="transcript" role="log" aria-label="Program output" aria-live="polite"></div>
         </div>
         <footer class="pane-footer">
           <span id="run-state" class="run-state" data-state="idle" role="status"><i></i><span>Idle</span></span>
@@ -95,10 +101,7 @@
       </section>
     </div>
 
-    <footer class="workspace-footer">
-      <span id="runtime">Python · Runs in your browser</span>
-      <span id="notice" role="status"></span>
-    </footer>
   </main>
+  <span id="notice" class="notice" role="status"></span>
 </body>
 </html>

@@ -4,9 +4,25 @@ const maxOutput = 256 * 1024;
 const waiting = -2;
 
 const runScript = `
+import builtins
 import runpy
 import sys
 import traceback
+
+def install_console_input(set_prompt):
+    native_input = builtins.input
+    stdin, stdout = sys.stdin, sys.stdout
+
+    def input(prompt="", /):
+        if sys.stdin is not stdin or sys.stdout is not stdout:
+            return native_input(prompt)
+        set_prompt(str(prompt))
+        try:
+            return native_input()
+        finally:
+            set_prompt("")
+
+    builtins.input = input
 
 def run_script():
     sys.argv[:] = ["main.py"]
@@ -32,6 +48,7 @@ def run_script():
         sys.stderr.flush()
     return 0
 
+install_console_input(set_console_prompt)
 run_script()
 `;
 
@@ -44,6 +61,7 @@ self.addEventListener("message", async ({ data: { source, sharedInput } }) => {
   const inputDecoder = new TextDecoder();
   let remainder = new Uint8Array();
   let inputEnded = false;
+  let inputPrompt = "";
   let output = "";
   let outputBytes = 0;
   let lastFlush = -Infinity;
@@ -75,15 +93,26 @@ self.addEventListener("message", async ({ data: { source, sharedInput } }) => {
     return buffer.length;
   }
 
+  function setPrompt(text) {
+    const length = encoder.encode(text).length;
+    if (length > maxOutput - outputBytes) {
+      done(1, { message: "Run stopped after reaching the console output limit." });
+      return;
+    }
+    outputBytes += length;
+    inputPrompt = text;
+  }
+
   function readLine() {
-    if (inputEnded) return null;
+    if (stopped || inputEnded) return null;
     if (!inputState) {
       done(1, { error: "Console input needs a cross-origin-isolated preview. Open the localhost preview or use the included hosting headers." });
       return null;
     }
     flushOutput();
     Atomics.store(inputState, 0, waiting);
-    emit({ type: "input" });
+    emit({ type: "input", prompt: inputPrompt });
+    inputPrompt = "";
     while (Atomics.load(inputState, 0) === waiting) Atomics.wait(inputState, 0, waiting);
     const byteCount = Atomics.load(inputState, 0);
     if (byteCount === -1) {
@@ -107,7 +136,6 @@ self.addEventListener("message", async ({ data: { source, sharedInput } }) => {
   }
 
   let pyodide;
-  let version;
   let runtimeURL = siteRuntimeURL;
   try {
     let loader;
@@ -121,15 +149,15 @@ self.addEventListener("message", async ({ data: { source, sharedInput } }) => {
     pyodide.setStdin({ read });
     pyodide.setStdout({ write });
     pyodide.setStderr({ write });
+    pyodide.globals.set("set_console_prompt", setPrompt);
     pyodide.FS.writeFile("main.py", source);
-    version = pyodide.runPython("__import__('platform').python_version()");
   } catch {
     emit({ type: "unavailable" });
     return;
   }
 
   started = performance.now();
-  emit({ type: "started", version, runtimeURL });
+  emit({ type: "started" });
   try {
     done(pyodide.runPython(runScript));
   } catch (error) {
