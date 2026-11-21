@@ -25,4 +25,10 @@ The WebAssembly module is the CPython runtime itself. The Python script you type
 python3 server.py
 ```
 
-Open [localhost:4173](http://127.0.0.1:4173/). The first run loads Pyodide from jsDelivr. For static deployment, [`vercel.json`](vercel.json) serves `web/` and sets the response headers for live input.
+Open [localhost:4173](http://127.0.0.1:4173/). If you have the old preview running, stop it with **Ctrl+C** and start it again from this folder.
+
+## Runtime downloads and offline use
+
+Vercel runs `npm run build` to include Pyodide in the static deployment. To include the same files in your local preview or on another static host, run `npm install` and `npm run build` before serving `web/`.
+
+The browser prefers the site's copy of Python and falls back to jsDelivr when a bundled copy is unavailable. On HTTPS and localhost, a service worker keeps the app and downloaded Python files in the browser's Cache Storage. Run once while connected to set up offline use. An uncached runtime and additional Python packages may need a network connection, and clearing site data removes the offline copy.

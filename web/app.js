@@ -42,6 +42,46 @@ let currentLine = -1;
 let leaveEditor = false;
 let noticeTimeout;
 
+function prepareOfflineCache() {
+  const serviceWorkers = navigator.serviceWorker;
+  if (!serviceWorkers) return Promise.resolve();
+  const registration = serviceWorkers.register(new URL("./offline-worker.js", import.meta.url));
+  if (serviceWorkers.controller) {
+    registration.catch(() => {});
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    const ready = () => {
+      window.clearTimeout(timeout);
+      serviceWorkers.removeEventListener("controllerchange", ready);
+      resolve();
+    };
+    const timeout = window.setTimeout(ready, 2500);
+    serviceWorkers.addEventListener("controllerchange", ready);
+    registration.then(() => {
+      if (serviceWorkers.controller) ready();
+    }, ready);
+  });
+}
+
+const offlineCacheReady = prepareOfflineCache();
+
+async function updateRuntimeLabel(version, runtimeURL) {
+  const onlineLabel = "Python " + version + " · Runs in your browser";
+  runtimeLabel.textContent = onlineLabel;
+  if (!navigator.serviceWorker?.controller || !window.caches) return;
+  const files = ["pyodide.mjs", "pyodide.asm.js", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json"];
+  try {
+    const saved = await Promise.all(files.map((file) => window.caches.match(new URL(file, runtimeURL).href)));
+    if (runtimeLabel.textContent === onlineLabel && saved.every(Boolean)) {
+      runtimeLabel.textContent = "Python " + version + " · Ready offline";
+    }
+  } catch {
+    // The runtime can still work online if storage is unavailable.
+  }
+}
+
 function readSetting(key) {
   try {
     return localStorage.getItem("skillissues." + key) ?? localStorage.getItem("pybench." + key);
@@ -354,6 +394,7 @@ function finishRun(run, event) {
   selectConsoleTab(consoleTabs[0]);
   setRunning(false);
   if (focusWasInInput) outputPanel.focus({ preventScroll: true });
+  if (run.runtime) updateRuntimeLabel(run.runtime.version, run.runtime.runtimeURL);
 
   if (event.error) {
     showOutput(event.error + "\n", "error");
@@ -398,7 +439,8 @@ function handleRunEvent(run, event) {
   switch (event.type) {
     case "started":
       run.started = performance.now();
-      runtimeLabel.textContent = "Python " + event.version + " · Runs in your browser";
+      run.runtime = event;
+      updateRuntimeLabel(event.version, event.runtimeURL);
       resumeRunClock(run);
       setState("running", "Running");
       break;
@@ -420,12 +462,12 @@ function handleRunEvent(run, event) {
       finishRun(run, event);
       break;
     case "unavailable":
-      finishRun(run, { error: "Python could not load. Check your connection and try again in an up-to-date browser." });
+      finishRun(run, { error: "Python could not load. Connect to the internet for the first run, then try again." });
       break;
   }
 }
 
-function runCode() {
+async function runCode() {
   if (activeRun || !code.value.trim()) return;
   if (code.value.length > 65536) {
     announce("Code is limited to 65,536 characters");
@@ -459,10 +501,19 @@ function runCode() {
   setState("running", "Loading Python…");
   setRunning(true);
   try {
+    await offlineCacheReady;
+    if (activeRun !== run) return;
     const worker = new Worker(new URL("./python-worker.js", import.meta.url), { type: "module" });
     run.worker = worker;
     worker.onmessage = ({ data }) => handleRunEvent(run, data);
-    worker.onerror = () => handleRunEvent(run, { type: "unavailable" });
+    worker.onerror = () => {
+      const localhost = ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname);
+      finishRun(run, {
+        error: localhost
+          ? "The Python worker could not start. Restart the local preview with python3 server.py and refresh."
+          : "The Python worker could not start. Refresh the page and try again.",
+      });
+    };
     run.timeout = window.setTimeout(() => {
       finishRun(run, { error: "Python is taking too long to load. Check your connection and try again." });
     }, 90000);

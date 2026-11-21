@@ -1,4 +1,5 @@
-const runtimeURL = "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/";
+const cdnRuntimeURL = "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/";
+const siteRuntimeURL = new URL("./runtime/v0.29.3/", import.meta.url).href;
 const maxOutput = 256 * 1024;
 const waiting = -2;
 
@@ -105,9 +106,16 @@ self.addEventListener("message", async ({ data: { source, lines, sharedInput } }
 
   let pyodide;
   let version;
+  let runtimeURL = siteRuntimeURL;
   try {
-    const { loadPyodide } = await import(runtimeURL + "pyodide.mjs");
-    pyodide = await loadPyodide({ indexURL: runtimeURL });
+    let loader;
+    try {
+      loader = await import(siteRuntimeURL + "pyodide.mjs");
+    } catch {
+      runtimeURL = cdnRuntimeURL;
+      loader = await import(cdnRuntimeURL + "pyodide.mjs");
+    }
+    pyodide = await loader.loadPyodide({ indexURL: runtimeURL, packageBaseUrl: cdnRuntimeURL });
     pyodide.setStdin({ read });
     pyodide.setStdout({ write });
     pyodide.setStderr({ write });
@@ -119,7 +127,7 @@ self.addEventListener("message", async ({ data: { source, lines, sharedInput } }
   }
 
   started = performance.now();
-  emit({ type: "started", version });
+  emit({ type: "started", version, runtimeURL });
   try {
     done(pyodide.runPython(runScript));
   } catch (error) {
