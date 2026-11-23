@@ -1,6 +1,12 @@
 import { highlight } from "./highlight.js";
+import { setupCompetitiveTools } from "./cp.js";
+import { isBundledWorkspace, isHostedWorkspace } from "./cp-bridge.js";
 
 const starterCode = 'print("Hello, Python!")\n';
+const isExtension = isBundledWorkspace;
+const competitiveWorkspace = isExtension || isHostedWorkspace;
+const problemPath = competitiveWorkspace ? new URLSearchParams(location.search).get("problem") : null;
+const draftKey = problemPath ? "draft:" + problemPath : "code";
 const indentWidth = 4;
 const matchingPairs = { "(": ")", "[": "]", "{": "}", "'": "'", '"': '"' };
 const closingCharacters = new Set(Object.values(matchingPairs));
@@ -36,6 +42,7 @@ const runTooltip = mac ? "Run code (⌘ + Enter)" : "Run code (Ctrl + Enter)";
 runButton.title = runTooltip;
 
 let activeRun = null;
+let testing = false;
 let preparedPython = null;
 let preferredRuntime = "site";
 let currentLine = -1;
@@ -43,6 +50,7 @@ let leaveEditor = false;
 let noticeTimeout;
 
 function prepareOfflineCache() {
+  if (isExtension) return Promise.resolve();
   const serviceWorkers = navigator.serviceWorker;
   if (!serviceWorkers) return Promise.resolve();
   const registration = serviceWorkers.register(new URL("./offline-worker.js", import.meta.url));
@@ -121,11 +129,11 @@ function drawEditor() {
   currentLine = -1;
   updateCursor();
   syncScroll();
-  if (!activeRun) runButton.disabled = !code.value.trim();
+  if (!activeRun) runButton.disabled = testing || !code.value.trim();
 }
 
 function editorChanged() {
-  saveSetting("code", code.value);
+  saveSetting(draftKey, code.value);
   drawEditor();
 }
 
@@ -208,7 +216,7 @@ function editMatchingPair(event) {
   return true;
 }
 
-code.value = readSetting("code") ?? starterCode;
+code.value = readSetting(draftKey) ?? (problemPath ? "" : starterCode);
 code.addEventListener("input", editorChanged);
 code.addEventListener("scroll", syncScroll);
 for (const event of ["keyup", "click", "select", "focus"]) code.addEventListener(event, updateCursor);
@@ -234,7 +242,7 @@ code.addEventListener("keydown", (event) => {
     const lineStart = before.lastIndexOf("\n") + 1;
     const line = before.slice(lineStart);
     event.preventDefault();
-    if (!event.shiftKey && !activeRun && start === end && line.trim() === "r"
+    if (!event.shiftKey && !activeRun && !testing && start === end && line.trim() === "r"
       && !value.slice(end).trim() && value.slice(0, lineStart).trim()) {
       const nextLine = value.indexOf("\n", end);
       deleteRange(lineStart, nextLine === -1 ? value.length : nextLine);
@@ -333,7 +341,7 @@ function setRunning(running) {
   runButton.querySelector("use").setAttribute("href", running ? "#i-stop" : "#i-play");
   runButton.setAttribute("aria-label", running ? "Stop run" : "Run code");
   runButton.title = running ? "Stop run" : runTooltip;
-  runButton.disabled = !running && !code.value.trim();
+  runButton.disabled = !running && (testing || !code.value.trim());
 }
 
 function showInput() {
@@ -512,7 +520,7 @@ async function preparePython() {
   preparedPython = preparation;
   // Give the service worker a chance to cache the runtime on a first visit.
   await offlineCacheReady;
-  if (preparedPython === preparation) loadPython(preparation, preferredRuntime, true);
+  if (preparedPython === preparation) loadPython(preparation, preferredRuntime, !isExtension);
 }
 
 function loadPython(preparation, runtime, canRetry) {
@@ -529,7 +537,7 @@ function loadPython(preparation, runtime, canRetry) {
     } else {
       preparedPython = null;
       if (activeRun) finishRun(activeRun, {
-        error: "Python could not start from either runtime source. Check your connection and press Run to try again.",
+        error: isExtension ? "The bundled Python runtime could not start." : "Python could not start from either runtime source. Check your connection and press Run to try again.",
       });
     }
   }
@@ -575,7 +583,7 @@ function startPreparedRun() {
 
 function runCode({ fromRShortcut = false } = {}) {
   const source = code.value;
-  if (activeRun || !source.trim()) return;
+  if (activeRun || testing || !source.trim()) return;
   if (source.length > 65536) {
     announce("Code is limited to 65,536 characters");
     return;
@@ -619,3 +627,14 @@ document.addEventListener("keydown", (event) => {
 
 drawEditor();
 preparePython();
+if (competitiveWorkspace) setupCompetitiveTools({
+  code,
+  problemPath,
+  canTest: () => !activeRun,
+  setTesting(value) {
+    testing = value;
+    setRunning(false);
+    if (value) discardPreparedPython();
+    else preparePython();
+  },
+});
