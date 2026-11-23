@@ -332,3 +332,91 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   #gutter div { padding-right: 9px; }
   #code, #code-paint, #live-stdin { font-size: 16px; }
 }
+
+.cp-mode .main {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(340px, 1fr);
+}
+.cp-mode .workbench {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.9fr) minmax(0, 1fr);
+}
+.cp-mode .console-pane { border-left: 0; border-top: 1px solid var(--line); }
+.cp-problem, .cp-tests { background: var(--surface); }
+.cp-problem {
+  grid-column: 1 / -1;
+  grid-template: auto auto / minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 14px 16px;
+  border-block-end: 1px solid var(--line);
+}
+.cp-problem h1, .cp-tests h2, .cp-case h3 { margin: 0; }
+.cp-problem h1 { font-size: 20px; overflow-wrap: anywhere; }
+.cp-problem p, #cp-test-summary { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+#cp-status { grid-column: 1 / -1; }
+#cp-status:empty { display: none; }
+.cp-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cp-actions a, .cp-actions button, .cp-actions select, .cp-case button, #cp-run-tests {
+  border: 1px solid var(--line);
+  background: var(--toolbar);
+  padding: 6px 10px;
+  color: var(--ink);
+  border-radius: 6px;
+  font-size: 13px;
+  text-decoration: none;
+}
+.cp-actions select { max-width: min(240px, 100%); }
+.cp-actions .cp-primary, #cp-run-tests { background: var(--accent); color: var(--accent-ink); }
+#cp-run-tests { font-weight: 650; white-space: nowrap; }
+.cp-actions :is(a, button:not(:disabled)):hover, .cp-case button:hover:not(:disabled), #cp-run-tests:hover:not(:disabled) { filter: brightness(1.14); }
+.cp-actions button:disabled, .cp-case button:disabled, #cp-run-tests:disabled { opacity: .55; }
+.cp-tests { grid-template-rows: auto auto minmax(0, 1fr); border-inline-start: 1px solid var(--line); overflow: hidden; }
+.cp-tests .pane-header { padding: 12px 16px; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.cp-tests h2 { font-size: 15px; }
+#cp-test-summary { margin: 12px 16px; }
+#cp-test-summary:empty { display: none; }
+.cp-cases { display: grid; grid-row: 3; align-content: start; gap: 10px; margin: 0 16px 16px; overflow: auto; }
+.cp-cases:empty { display: none; }
+.cp-case { display: grid; align-content: start; gap: 10px; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--console); padding: 12px; }
+.cp-case-header { display: flex; gap: 8px; align-items: center; }
+.cp-case h3 { margin-right: auto; font-size: 14px; }
+.cp-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cp-case label, .cp-case details { color: var(--muted); font-size: 12px; }
+.cp-case textarea {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  margin-top: 4px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--editor);
+  color: var(--ink);
+  font: 12px/1.45 var(--mono);
+  resize: vertical;
+}
+.cp-case textarea:disabled { opacity: .55; }
+.cp-check { display: flex; align-items: center; gap: 5px; }
+.cp-case summary { cursor: pointer; }
+.cp-case pre { overflow: auto; max-height: 170px; margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); font: 12px/1.45 var(--mono); }
+.cp-verdict { color: var(--warning); font: 11px var(--mono); }
+.cp-verdict:is([data-verdict="Passed"], [data-verdict="Ran"]) { color: var(--builtin); }
+.cp-verdict:is([data-verdict="Wrong answer"], [data-verdict="Runtime error"], [data-verdict="Runner error"]) { color: var(--error); }
+
+@media (max-width: 840px) {
+  .cp-mode body { display: block; height: auto; min-height: 100dvh; }
+  .cp-mode .main {
+    min-height: calc(100dvh - 58px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto clamp(430px, 65dvh, 620px) 1fr;
+  }
+  .cp-problem { grid-template-columns: minmax(0, 1fr); }
+  .cp-tests { border-inline-start: 0; border-block-start: 1px solid var(--line); }
+  .cp-cases { overflow: visible; }
+}
+
+@media (max-width: 430px) {
+  .cp-mode .editor-actions { gap: 8px; }
+  .cp-mode .editor-actions .pane-meta { display: none; }
+}
