@@ -1,4 +1,4 @@
-import { isHostedWorkspace, onSamplesChanged, requestCompiler } from "./cp-bridge.js";
+import { onSamplesChanged, requestCompiler } from "./cp-bridge.js";
 
 const maxInputSize = 256 * 1024;
 const maxCodeLength = 65536;
@@ -76,7 +76,6 @@ export async function setupCompetitiveTools({ code, problemPath, canTest, setTes
   get("cp-problem").hidden = get("cp-tests").hidden = get("cp-run-tests").hidden = false;
 
   const library = get("cp-library");
-  const local = get("cp-local");
   const submit = get("cp-submit");
   const status = get("cp-status");
   const summary = get("cp-test-summary");
@@ -272,14 +271,6 @@ export async function setupCompetitiveTools({ code, problemPath, canTest, setTes
     }
   };
 
-  local.onclick = async () => {
-    try {
-      await requestCompiler({ type: "open-bundled-compiler" });
-    } catch (error) {
-      status.textContent = error.message;
-    }
-  };
-
   code.addEventListener("input", refreshControls);
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
@@ -311,7 +302,6 @@ export async function setupCompetitiveTools({ code, problemPath, canTest, setTes
 
   try {
     const { problems, selected } = await requestCompiler({ type: "compiler-state" });
-    local.hidden = !isHostedWorkspace;
     if (problems.length) {
       library.append(new Option("Practice workspace", ""));
       for (const entry of problems) library.append(new Option(entry.title, entry.path));
