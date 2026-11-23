@@ -39,6 +39,19 @@
   </header>
 
   <main class="main">
+    <section class="pane cp-problem" id="cp-problem" aria-labelledby="cp-title" hidden>
+      <div>
+        <h1 id="cp-title">Practice workspace</h1>
+        <p id="cp-details">Open a Codeforces problem to import its sample tests automatically.</p>
+      </div>
+      <div class="cp-actions">
+        <select id="cp-library" aria-label="Imported problems" hidden></select>
+        <button type="button" id="cp-local" hidden>Open local compiler</button>
+        <a id="cp-link" target="_blank" rel="noopener" hidden>View on Codeforces</a>
+        <button type="button" id="cp-submit" class="cp-primary" hidden>Prepare submission</button>
+      </div>
+      <p id="cp-status" role="status"></p>
+    </section>
     <div class="workbench">
       <section class="pane editor-pane" aria-labelledby="editor-title">
         <header class="pane-header editor-header">
@@ -48,6 +61,7 @@
           </div>
           <div class="editor-actions">
             <span class="pane-meta">Python</span>
+            <button id="cp-run-tests" type="button" aria-controls="cp-tests" disabled hidden>Run Tests</button>
             <button id="run" type="button" class="run-button" aria-label="Run code" title="Run code">
               <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>
             </button>
@@ -101,6 +115,17 @@
       </section>
     </div>
 
+    <section class="pane cp-tests" id="cp-tests" aria-labelledby="cp-tests-title" hidden>
+      <header class="pane-header">
+        <h2 id="cp-tests-title">Test cases</h2>
+        <div class="cp-actions">
+          <button type="button" id="cp-add-test" disabled>Add custom test</button>
+          <button type="button" id="cp-stop-tests" hidden>Stop tests</button>
+        </div>
+      </header>
+      <p id="cp-test-summary" role="status"></p>
+      <div class="cp-cases" id="cp-cases"></div>
+    </section>
   </main>
   <span id="notice" class="notice" role="status"></span>
 </body>
