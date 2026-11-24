@@ -2,7 +2,7 @@ const base = new URL(self.registration.scope);
 const cachePrefix = "skillissues:" + base.pathname;
 const appCache = cachePrefix + "app-1";
 const runtimeCache = cachePrefix + "python-1";
-const appAssets = ["./", "./app.js", "./highlight.js", "./icon.svg", "./index.html", "./python-worker.js", "./style.css"];
+const appAssets = ["./", "./app.js", "./highlight.js", "./icon.svg", "./index.html", "./python-worker.js", "./style.css", "./visualizer.js"];
 const appURLs = new Set(appAssets.map((asset) => new URL(asset, base).href));
 const runtimePath = new URL("runtime/", base).pathname;
 

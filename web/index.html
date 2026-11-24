@@ -48,6 +48,7 @@
           </div>
           <div class="editor-actions">
             <span class="pane-meta">Python</span>
+            <button id="visualize" type="button" class="step-button">Visualize</button>
             <button id="run" type="button" class="run-button" aria-label="Run code" title="Run code">
               <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>
             </button>
@@ -73,6 +74,7 @@
           <div class="console-tabs" role="tablist" aria-label="Console">
             <button type="button" id="input-tab" role="tab" aria-controls="input-panel" aria-selected="false" tabindex="-1">Input</button>
             <button type="button" id="output-tab" role="tab" aria-controls="output-panel" aria-selected="true">Output</button>
+            <button type="button" id="trace-tab" role="tab" aria-controls="trace-panel" aria-selected="false" tabindex="-1">Trace</button>
           </div>
           <div class="console-actions" id="console-actions">
             <button type="button" id="copy" class="tool-button" aria-label="Copy console output" title="Copy output" disabled>
@@ -93,6 +95,29 @@
             <p>Ready to run</p>
           </div>
           <div class="console-stream" id="transcript" role="log" aria-label="Program output" aria-live="polite"></div>
+        </div>
+        <div class="console-body trace-panel" id="trace-panel" role="tabpanel" aria-labelledby="trace-tab" tabindex="0" hidden>
+          <p id="trace-notice" class="trace-notice" role="status">Click Visualize to record a Python run.</p>
+          <div id="trace-content" hidden>
+            <div class="trace-controls">
+              <button id="trace-back" type="button" class="step-button">Back</button>
+              <button id="trace-next" type="button" class="step-button">Next</button>
+              <input id="trace-range" type="range" min="0" max="0" value="0" aria-label="Execution step">
+              <span id="trace-position" aria-live="polite"></span>
+            </div>
+            <section class="trace-section" aria-labelledby="trace-location">
+              <h3 id="trace-location" aria-live="polite"></h3>
+              <pre id="trace-line" class="trace-code"></pre>
+            </section>
+            <section class="trace-section" aria-labelledby="trace-variables">
+              <h3 id="trace-variables">Variables</h3>
+              <div id="trace-frames"></div>
+            </section>
+            <section class="trace-section" aria-labelledby="trace-output-heading">
+              <h3 id="trace-output-heading">Output so far</h3>
+              <pre id="trace-output" class="trace-code"></pre>
+            </section>
+          </div>
         </div>
         <footer class="pane-footer">
           <span id="run-state" class="run-state" data-state="idle" role="status"><i></i><span>Idle</span></span>

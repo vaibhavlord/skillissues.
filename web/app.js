@@ -1,4 +1,5 @@
 import { highlight } from "./highlight.js";
+import { createVisualizer } from "./visualizer.js";
 
 const starterCode = 'print("Hello, Python!")\n';
 const indentWidth = 4;
@@ -12,10 +13,14 @@ const paint = byId("code-paint");
 const codeLines = byId("code-lines");
 const cursor = byId("cursor");
 const runButton = byId("run");
+const visualizeButton = byId("visualize");
 const inputTab = byId("input-tab");
 const outputTab = byId("output-tab");
+const traceTab = byId("trace-tab");
 const inputPanel = byId("input-panel");
 const outputPanel = byId("output-panel");
+const tracePanel = byId("trace-panel");
+const consoleTabs = [inputTab, outputTab, traceTab];
 const consoleActions = byId("console-actions");
 const inputTranscript = byId("input-transcript");
 const transcript = byId("transcript");
@@ -39,8 +44,10 @@ let activeRun = null;
 let preparedPython = null;
 let preferredRuntime = "site";
 let currentLine = -1;
+let tracedLine = -1;
 let leaveEditor = false;
 let noticeTimeout;
+const visualizer = createVisualizer(showTraceLine);
 
 function prepareOfflineCache() {
   const serviceWorkers = navigator.serviceWorker;
@@ -121,7 +128,28 @@ function drawEditor() {
   currentLine = -1;
   updateCursor();
   syncScroll();
-  if (!activeRun) runButton.disabled = !code.value.trim();
+  if (!activeRun) runButton.disabled = visualizeButton.disabled = !code.value.trim();
+  visualizer.refreshLine();
+}
+
+function showTraceLine(line, source, scroll) {
+  codeLines.children[tracedLine]?.classList.remove("executing");
+  gutter.children[tracedLine]?.classList.remove("executing");
+  tracedLine = -1;
+  if (!line || tracePanel.hidden || code.value !== source) return;
+  const row = codeLines.children[line - 1];
+  if (!row) return;
+  tracedLine = line - 1;
+  row.classList.add("executing");
+  gutter.children[tracedLine].classList.add("executing");
+  if (scroll) {
+    const bounds = row.getBoundingClientRect();
+    const viewport = code.getBoundingClientRect();
+    if (bounds.top < viewport.top || bounds.bottom > viewport.bottom) {
+      code.scrollTop += bounds.top - viewport.top - (viewport.height - bounds.height) / 2;
+      syncScroll();
+    }
+  }
 }
 
 function editorChanged() {
@@ -263,36 +291,35 @@ function scrollConsole(panel) {
 }
 
 function selectConsoleTab(tab) {
-  const isInput = tab === inputTab;
-  const visiblePanel = isInput ? inputPanel : outputPanel;
-  const hiddenPanel = isInput ? outputPanel : inputPanel;
-  const otherTab = isInput ? outputTab : inputTab;
-  const moveFocus = hiddenPanel.contains(document.activeElement);
-  const moveTabFocus = document.activeElement === otherTab;
-  tab.setAttribute("aria-selected", "true");
-  tab.tabIndex = 0;
-  otherTab.setAttribute("aria-selected", "false");
-  otherTab.tabIndex = -1;
-  visiblePanel.hidden = false;
-  hiddenPanel.hidden = true;
-  consoleActions.hidden = isInput;
-  scrollConsole(visiblePanel);
-  if (moveFocus) visiblePanel.focus({ preventScroll: true });
-  if (moveTabFocus) tab.focus({ preventScroll: true });
+  const focused = document.activeElement;
+  const visiblePanel = byId(tab.getAttribute("aria-controls"));
+  let movePanelFocus = false;
+  for (const item of consoleTabs) {
+    const selected = item === tab;
+    const panel = byId(item.getAttribute("aria-controls"));
+    if (!selected && panel.contains(focused)) movePanelFocus = true;
+    item.setAttribute("aria-selected", String(selected));
+    item.tabIndex = selected ? 0 : -1;
+    panel.hidden = !selected;
+  }
+  consoleActions.hidden = tab !== outputTab;
+  if (tab !== traceTab) scrollConsole(visiblePanel);
+  visualizer.refreshLine(tab === traceTab);
+  if (movePanelFocus) visiblePanel.focus({ preventScroll: true });
+  if (consoleTabs.includes(focused) && focused !== tab) tab.focus({ preventScroll: true });
 }
 
-for (const tab of [inputTab, outputTab]) {
+for (const [index, tab] of consoleTabs.entries()) {
   tab.addEventListener("click", () => {
     selectConsoleTab(tab);
     if (tab === inputTab && activeRun?.waiting) focusInput();
   });
   tab.addEventListener("keydown", (event) => {
     let nextTab;
-    if (event.key === "Home") nextTab = inputTab;
-    if (event.key === "End") nextTab = outputTab;
-    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      nextTab = tab === inputTab ? outputTab : inputTab;
-    }
+    if (event.key === "Home") nextTab = consoleTabs[0];
+    if (event.key === "End") nextTab = consoleTabs.at(-1);
+    if (event.key === "ArrowLeft") nextTab = consoleTabs[(index + consoleTabs.length - 1) % consoleTabs.length];
+    if (event.key === "ArrowRight") nextTab = consoleTabs[(index + 1) % consoleTabs.length];
     if (!nextTab) return;
     event.preventDefault();
     selectConsoleTab(nextTab);
@@ -334,6 +361,7 @@ function setRunning(running) {
   runButton.setAttribute("aria-label", running ? "Stop run" : "Run code");
   runButton.title = running ? "Stop run" : runTooltip;
   runButton.disabled = !running && !code.value.trim();
+  visualizeButton.disabled = running || !code.value.trim();
 }
 
 function showInput() {
@@ -425,7 +453,8 @@ function finishRun(run, event) {
   else discardPreparedPython();
   activeRun = null;
   hideInput();
-  selectConsoleTab(outputTab);
+  selectConsoleTab(run.visualize ? traceTab : outputTab);
+  if (run.visualize) visualizer.finish(event);
   setRunning(false);
 
   if (event.error) {
@@ -479,6 +508,13 @@ function handleRunEvent(run, event) {
       break;
     case "output":
       showOutput(event.text);
+      if (run.visualize) visualizer.addOutput(event.text);
+      break;
+    case "trace":
+      if (run.visualize) visualizer.addStep(event.step);
+      break;
+    case "trace-limit":
+      if (run.visualize) visualizer.limit();
       break;
     case "input":
       if (event.prompt) inputTranscript.append(event.prompt);
@@ -567,13 +603,13 @@ function startPreparedRun() {
   worker.onmessage = ({ data }) => handleRunEvent(run, data);
   run.timeout = window.setTimeout(failed, pythonLoadTimeout);
   try {
-    worker.postMessage({ source: run.source, sharedInput: run.sharedInput });
+    worker.postMessage({ source: run.source, sharedInput: run.sharedInput, visualize: run.visualize });
   } catch {
     failed();
   }
 }
 
-function runCode({ fromRShortcut = false } = {}) {
+function runCode({ fromRShortcut = false, visualize = false } = {}) {
   const source = code.value;
   if (activeRun || !source.trim()) return;
   if (source.length > 65536) {
@@ -587,6 +623,7 @@ function runCode({ fromRShortcut = false } = {}) {
     source,
     sharedInput,
     fromRShortcut,
+    visualize,
     created: performance.now(),
     remaining: 30000,
     queued: [],
@@ -597,7 +634,8 @@ function runCode({ fromRShortcut = false } = {}) {
   };
   activeRun = run;
   inputTranscript.replaceChildren();
-  selectConsoleTab(outputTab);
+  if (visualize) visualizer.start(source);
+  selectConsoleTab(visualize ? traceTab : outputTab);
   clearOutput();
   timing.textContent = "";
   setState("running", "Loading Python…");
@@ -610,6 +648,7 @@ runButton.addEventListener("click", () => {
   if (activeRun) stopRun();
   else runCode();
 });
+visualizeButton.addEventListener("click", () => runCode({ visualize: true }));
 document.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.isComposing) {
     event.preventDefault();
