@@ -1,12 +1,8 @@
 const base = new URL(self.registration.scope);
 const cachePrefix = "skillissues:" + base.pathname;
-const appCache = cachePrefix + "app-3";
+const appCache = cachePrefix + "app-4";
 const runtimeCache = cachePrefix + "python-1";
-<<<<<<< HEAD
-const appAssets = ["./", "./app.js", "./highlight.js", "./icon.svg", "./index.html", "./python-worker.js", "./style.css", "./visualizer.js"];
-=======
-const appAssets = ["./", "./app.js", "./cp.js", "./cp-bridge.js", "./highlight.js", "./icon.svg", "./index.html", "./python-worker.js", "./style.css"];
->>>>>>> e73b863867dfa059476d2df2159b635346c4fc25
+const appAssets = ["./", "./app.js", "./cp.js", "./cp-bridge.js", "./highlight.js", "./icon.svg", "./index.html", "./python-worker.js", "./style.css", "./visualizer.js"];
 const appURLs = new Set(appAssets.map((asset) => new URL(asset, base).href));
 const runtimePath = new URL("runtime/", base).pathname;
 
@@ -17,7 +13,7 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(Promise.all([1, 2].map((version) => caches.delete(cachePrefix + "app-" + version)))
+  event.waitUntil(Promise.all([1, 2, 3].map((version) => caches.delete(cachePrefix + "app-" + version)))
     .then(() => self.clients.claim()));
 });
 
