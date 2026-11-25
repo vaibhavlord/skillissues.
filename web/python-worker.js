@@ -56,8 +56,7 @@ def run_script(trace=None):
         sys.stderr.flush()
     return 0
 
-<<<<<<< HEAD
-install_console_input(set_console_prompt)
+install_console_input(set_console_prompt, batch_mode)
 `;
 
 const traceScript = `
@@ -141,10 +140,6 @@ def trace_user_code(frame, event, arg):
     return trace_user_code
 
 run_script(trace_user_code)
-=======
-install_console_input(set_console_prompt, batch_mode)
-run_script()
->>>>>>> e73b863867dfa059476d2df2159b635346c4fc25
 `;
 
 async function loadPython() {
@@ -159,11 +154,7 @@ const pythonReady = loadPython().then((pyodide) => {
   self.postMessage({ type: "unavailable" });
 });
 
-<<<<<<< HEAD
-self.addEventListener("message", async ({ data: { source, sharedInput, visualize } }) => {
-=======
-self.addEventListener("message", async ({ data: { source, sharedInput, batchInput } }) => {
->>>>>>> e73b863867dfa059476d2df2159b635346c4fc25
+self.addEventListener("message", async ({ data: { source, sharedInput, batchInput, visualize } }) => {
   const pyodide = await pythonReady;
   if (!pyodide) return;
   const emit = self.postMessage.bind(self);
@@ -269,7 +260,7 @@ self.addEventListener("message", async ({ data: { source, sharedInput, batchInpu
     pyodide.setStdout({ write });
     pyodide.setStderr({ write: (buffer) => write(buffer, true) });
     pyodide.globals.set("set_console_prompt", setPrompt);
-<<<<<<< HEAD
+    pyodide.globals.set("batch_mode", !!batchBytes);
     if (visualize) {
       pyodide.globals.set("record_trace_step", (step) => {
         if (stopped) return;
@@ -278,9 +269,6 @@ self.addEventListener("message", async ({ data: { source, sharedInput, batchInpu
       });
       pyodide.globals.set("report_trace_limit", () => emit({ type: "trace-limit" }));
     }
-=======
-    pyodide.globals.set("batch_mode", !!batchBytes);
->>>>>>> e73b863867dfa059476d2df2159b635346c4fc25
     pyodide.FS.writeFile("main.py", source);
     emit({ type: "started" });
     done(pyodide.runPython(runScript + (visualize ? traceScript : "\nrun_script()")));
