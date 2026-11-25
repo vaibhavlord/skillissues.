@@ -1,7 +1,11 @@
+import { inject } from '@vercel/analytics';
+
 import { highlight } from "./highlight.js";
 import { createVisualizer } from "./visualizer.js";
 import { setupCompetitiveTools } from "./cp.js";
 import { isBundledWorkspace, isHostedWorkspace } from "./cp-bridge.js";
+
+inject();
 
 const starterCode = 'print("Hello, Python!")\n';
 const isExtension = isBundledWorkspace;

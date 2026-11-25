@@ -5,6 +5,7 @@
     "build": "node scripts/copy-runtime.mjs"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "pyodide": "0.29.3"
   }
 }
