@@ -1,10 +1,7 @@
 import { highlight } from "./highlight.js";
-<<<<<<< HEAD
 import { createVisualizer } from "./visualizer.js";
-=======
 import { setupCompetitiveTools } from "./cp.js";
 import { isBundledWorkspace, isHostedWorkspace } from "./cp-bridge.js";
->>>>>>> e73b863867dfa059476d2df2159b635346c4fc25
 
 const starterCode = 'print("Hello, Python!")\n';
 const isExtension = isBundledWorkspace;
@@ -139,8 +136,7 @@ function drawEditor() {
   currentLine = -1;
   updateCursor();
   syncScroll();
-<<<<<<< HEAD
-  if (!activeRun) runButton.disabled = visualizeButton.disabled = !code.value.trim();
+  if (!activeRun) runButton.disabled = visualizeButton.disabled = testing || !code.value.trim();
   visualizer.refreshLine();
 }
 
@@ -162,9 +158,6 @@ function showTraceLine(line, source, scroll) {
       syncScroll();
     }
   }
-=======
-  if (!activeRun) runButton.disabled = testing || !code.value.trim();
->>>>>>> e73b863867dfa059476d2df2159b635346c4fc25
 }
 
 function editorChanged() {
@@ -375,12 +368,8 @@ function setRunning(running) {
   runButton.querySelector("use").setAttribute("href", running ? "#i-stop" : "#i-play");
   runButton.setAttribute("aria-label", running ? "Stop run" : "Run code");
   runButton.title = running ? "Stop run" : runTooltip;
-<<<<<<< HEAD
-  runButton.disabled = !running && !code.value.trim();
-  visualizeButton.disabled = running || !code.value.trim();
-=======
   runButton.disabled = !running && (testing || !code.value.trim());
->>>>>>> e73b863867dfa059476d2df2159b635346c4fc25
+  visualizeButton.disabled = running || testing || !code.value.trim();
 }
 
 function showInput() {
